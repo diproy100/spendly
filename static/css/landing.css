@@ -1,0 +1,196 @@
+/* ------------------------------------------------------------------ */
+/* Landing page — hero                                                 */
+/* ------------------------------------------------------------------ */
+
+.hero-landing {
+    --hero-green: #4a9b78;
+    --hero-green-dark: #2d6a4f;
+    --hero-green-bg: #e6f4ee;
+    --hero-green-border: #c5e6d6;
+    --hero-red: #d6453d;
+
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 5rem 2rem 4.5rem;
+    text-align: center;
+}
+
+.hero-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--hero-green-bg);
+    border: 1px solid var(--hero-green-border);
+    color: var(--hero-green-dark);
+    font-size: 1.05rem;
+    font-weight: 500;
+    padding: 0.55rem 1.5rem;
+    border-radius: 999px;
+    margin-bottom: 3rem;
+}
+
+.hero-pill-dot {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    background: var(--hero-green);
+}
+
+.hero-heading {
+    font-family: var(--font-body);
+    font-size: clamp(2.5rem, 7vw, 4.5rem);
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: -0.035em;
+    color: var(--ink);
+    margin-bottom: 2rem;
+}
+
+.hero-heading-accent {
+    display: block;
+    color: var(--hero-green);
+}
+
+.hero-lead {
+    max-width: 720px;
+    margin: 0 auto 3.5rem;
+    font-size: clamp(1.1rem, 2.4vw, 1.5rem);
+    line-height: 1.85;
+    color: var(--ink-muted);
+}
+
+.hero-cta {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    margin-bottom: 5rem;
+}
+
+.hero-btn {
+    display: inline-block;
+    background: var(--ink);
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: 1.25rem;
+    font-weight: 500;
+    padding: 1.1rem 2.5rem;
+    border-radius: 14px;
+    transition: background 0.2s;
+}
+
+.hero-btn:hover { background: var(--hero-green-dark); }
+
+/* Dashboard preview */
+
+.dash {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 1.75rem;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    text-align: left;
+}
+
+.dash-dots {
+    display: flex;
+    gap: 0.6rem;
+    margin-bottom: 1.75rem;
+}
+
+.dash-dots span {
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+}
+
+.dash-dots span:nth-child(1) { background: #e39a9a; }
+.dash-dots span:nth-child(2) { background: #f0c777; }
+.dash-dots span:nth-child(3) { background: #a8dcc8; }
+
+.dash-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.dash-stat,
+.dash-bars {
+    background: var(--paper-card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+}
+
+.dash-stat { padding: 1.4rem 1.6rem; }
+
+.dash-stat-label {
+    font-size: 1.05rem;
+    color: var(--ink-faint);
+    margin-bottom: 0.5rem;
+}
+
+.dash-stat-value {
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 0.4rem;
+}
+
+.dash-stat-note {
+    font-size: 1.05rem;
+    color: var(--ink-faint);
+}
+
+.dash-stat-note.is-up { color: var(--hero-red); }
+.dash-stat-note.is-good { color: var(--hero-green); }
+
+.dash-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+    padding: 1.6rem 1.6rem 1.7rem;
+}
+
+.dash-bar-row {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.dash-bar-label {
+    text-align: right;
+    font-size: 1.15rem;
+    color: var(--ink-muted);
+}
+
+.dash-bar-track {
+    height: 0.8rem;
+    background: var(--paper-warm);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.dash-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+}
+
+.dash-bar-food { background: #e5a444; }
+.dash-bar-travel { background: #4a86d8; }
+.dash-bar-bills { background: #7c6fd0; }
+
+@media (max-width: 700px) {
+    .hero-landing { padding: 3rem 1rem 3rem; }
+    .hero-pill { font-size: 0.9rem; padding: 0.45rem 1.1rem; margin-bottom: 2rem; }
+    .hero-cta { margin-bottom: 3rem; }
+    .hero-btn { font-size: 1.05rem; padding: 0.9rem 1.75rem; }
+    .dash { padding: 1rem; border-radius: 20px; }
+    .dash-stats { grid-template-columns: 1fr; gap: 0.75rem; }
+    .dash-bar-row { grid-template-columns: 4rem 1fr; gap: 0.75rem; }
+    .dash-bar-label { font-size: 1rem; }
+}
