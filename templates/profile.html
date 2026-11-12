@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}Profile — Spendly{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<section class="profile-page">
+    <div class="profile-container">
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <div class="auth-{{ category }}">{{ message }}</div>
+        {% endfor %}
+        {% endwith %}
+
+        <!-- Hero ------------------------------------------------------ -->
+        <div class="profile-hero">
+            <div class="profile-identity-wrap">
+                <div class="profile-avatar" aria-hidden="true">{{ initials }}</div>
+                <div class="profile-identity">
+                    <h1 class="profile-name">{{ user.name }}</h1>
+                    <p class="profile-email">{{ user.email }}</p>
+                    {% if member_since %}
+                    <p class="profile-since">Member since {{ member_since }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="profile-hero-total">
+                <span class="hero-label">Total spent</span>
+                <span class="hero-value">{{ summary.total_amount|inr }}</span>
+                <span class="hero-sub">across {{ summary.expense_count }} expense{{ '' if summary.expense_count == 1 else 's' }}</span>
+            </div>
+        </div>
+
+        <!-- Stats ----------------------------------------------------- -->
+        <div class="profile-stats">
+            <div class="stat-card">
+                <span class="stat-label">This month</span>
+                <span class="stat-value">{{ this_month|inr }}</span>
+                <span class="stat-sub">Last month {{ last_month|inr }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Monthly average</span>
+                <span class="stat-value">{{ avg_month|inr }}</span>
+                <span class="stat-sub">over {{ summary.active_months }} month{{ '' if summary.active_months == 1 else 's' }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Expenses</span>
+                <span class="stat-value">{{ summary.expense_count }}</span>
+                <span class="stat-sub">transactions logged</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Top category</span>
+                <span class="stat-value">{{ summary.top_category or '—' }}</span>
+                <span class="stat-sub">
+                    {% if categories %}{{ categories[0].pct }}% of spending{% else %}nothing yet{% endif %}
+                </span>
+            </div>
+        </div>
+
+        {% if summary.expense_count %}
+
+        <div class="profile-grid">
+
+            <!-- Monthly trend ---------------------------------------- -->
+            <div class="profile-card">
+                <div class="card-head">
+                    <h2 class="profile-card-title">Monthly spending</h2>
+                    <span class="card-meta">Last 6 months</span>
+                </div>
+
+                {% set axis_max = chart_ticks[-1] or 1 %}
+                <div class="bar-chart" aria-hidden="true">
+                    <div class="bar-plot">
+                        {% for t in chart_ticks %}
+                        <div class="grid-line" style="bottom: {{ t / axis_max * 100 }}%">
+                            <span class="grid-label">{{ t|inr_short }}</span>
+                        </div>
+                        {% endfor %}
+                        <div class="bar-cols">
+                            {% for m in months %}
+                            <div class="bar-col" tabindex="0">
+                                <div class="bar{% if m.current %} bar-current{% endif %}"
+                                     style="height: {{ m.total / axis_max * 100 }}%">
+                                    <span class="bar-tip">
+                                        <strong>{{ m.total|inr }}</strong>
+                                        {{ m.full_label }}{% if m.current %} · so far{% endif %}
+                                    </span>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="bar-axis">
+                        {% for m in months %}
+                        <span class="bar-axis-label{% if m.current %} is-current{% endif %}">{{ m.label }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <table class="sr-only">
+                    <caption>Monthly spending, last 6 months</caption>
+                    <tr><th>Month</th><th>Total</th></tr>
+                    {% for m in months %}
+                    <tr><td>{{ m.full_label }}</td><td>{{ m.total|inr }}</td></tr>
+                    {% endfor %}
+                </table>
+            </div>
+
+            <!-- Largest expenses ------------------------------------- -->
+            <div class="profile-card">
+                <div class="card-head">
+                    <h2 class="profile-card-title">Biggest expenses</h2>
+                </div>
+                <ol class="largest-list">
+                    {% for e in largest %}
+                    <li class="largest-item">
+                        <span class="largest-rank">{{ loop.index }}</span>
+                        <div class="largest-info">
+                            <span class="largest-desc">{{ e.description or e.category }}</span>
+                            <span class="largest-meta">{{ e.category }} · {{ e.date }}</span>
+                        </div>
+                        <span class="largest-amount">{{ e.amount|inr }}</span>
+                    </li>
+                    {% endfor %}
+                </ol>
+            </div>
+
+            <!-- Recent expenses -------------------------------------- -->
+            <div class="profile-card">
+                <div class="card-head">
+                    <h2 class="profile-card-title">Recent expenses</h2>
+                    <span class="card-meta">Latest {{ recent|length }}</span>
+                </div>
+                <div class="table-wrap">
+                    <table class="expense-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th>Category</th>
+                                <th class="num">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for e in recent %}
+                            <tr>
+                                <td class="expense-date">{{ e.date }}</td>
+                                <td>{{ e.description or '—' }}</td>
+                                <td><span class="category-badge">{{ e.category }}</span></td>
+                                <td class="num">{{ e.amount|inr }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Category breakdown ----------------------------------- -->
+            <div class="profile-card">
+                <div class="card-head">
+                    <h2 class="profile-card-title">Spending by category</h2>
+                    <span class="card-meta">All time</span>
+                </div>
+                <div class="category-bars">
+                    {% for c in categories %}
+                    <div class="category-row" tabindex="0"
+                         title="{{ c.name }}: {{ c.total|inr }} · {{ c.count }} expense{{ '' if c.count == 1 else 's' }}">
+                        <div class="category-top">
+                            <span class="category-name">{{ c.name }}</span>
+                            <span class="category-amount">{{ c.total|inr }}</span>
+                        </div>
+                        <div class="category-bottom">
+                            <div class="category-track">
+                                <div class="category-fill" style="width: {{ c.bar }}%"></div>
+                            </div>
+                            <span class="category-pct">{{ c.pct }}%</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+
+        {% else %}
+
+        <div class="profile-card profile-empty">
+            <h2 class="profile-card-title">No expenses yet</h2>
+            <p>Your spending charts and recent expenses will appear here once you add your first expense.</p>
+        </div>
+
+        {% endif %}
+
+    </div>
+</section>
+
+{% endblock %}
