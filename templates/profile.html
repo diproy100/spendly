@@ -169,10 +169,10 @@
                 <div class="category-bars">
                     {% for c in categories %}
                     <div class="category-row" tabindex="0"
-                         title="{{ c.name }}: {{ c.total|inr }} · {{ c.count }} expense{{ '' if c.count == 1 else 's' }}">
+                         title="{{ c.name }}: {{ c.amount|inr }}">
                         <div class="category-top">
                             <span class="category-name">{{ c.name }}</span>
-                            <span class="category-amount">{{ c.total|inr }}</span>
+                            <span class="category-amount">{{ c.amount|inr }}</span>
                         </div>
                         <div class="category-bottom">
                             <div class="category-track">

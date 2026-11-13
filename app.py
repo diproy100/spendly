@@ -24,7 +24,6 @@ from database.db import (
     get_user_by_id,
     init_db,
     seed_db,
-    seed_demo_expenses,
 )
 
 app = Flask(__name__)
@@ -47,7 +46,6 @@ def inr_short(amount):
 with app.app_context():
     init_db()
     seed_db()
-    seed_demo_expenses("John Doe", "johndoe@gmail.com", "john123")
 
 
 # ------------------------------------------------------------------ #
@@ -139,21 +137,15 @@ def profile():
         flash("Please sign in to view your profile.", "error")
         return redirect(url_for("login"))
 
-    summary = get_expense_summary(user_id)
-    total = summary["total_amount"]
-    categories = [
-        {
-            "name": row["category"],
-            "total": row["total"],
-            "count": row["count"],
-            "pct": round(row["total"] / total * 100, 1) if total else 0,
-        }
-        for row in get_category_breakdown(user_id)
-    ]
-    top_total = categories[0]["total"] if categories else 0
-    for c in categories:
-        # Bar length relative to the largest category so the top one fills the row
-        c["bar"] = round(c["total"] / top_total * 100, 1) if top_total else 0
+    stats = _build_summary(user_id)
+    total = stats["total_spent"]
+    summary = {
+        "total_amount": total,
+        "expense_count": stats["transaction_count"],
+        "top_category": stats["top_category"] if stats["transaction_count"] else None,
+        "active_months": get_expense_summary(user_id)["active_months"],
+    }
+    categories = _build_categories(user_id)
 
     months = _monthly_series(user_id, count=6)
     this_month = months[-1]["total"]
@@ -181,7 +173,7 @@ def profile():
         last_month=last_month,
         avg_month=avg_month,
         largest=get_largest_expenses(user_id, limit=4),
-        recent=get_recent_expenses(user_id, limit=8),
+        recent=_build_transactions(user_id, limit=8),
     )
 
 
@@ -215,6 +207,51 @@ def _chart_ticks(peak, max_steps=5):
     step = next(n * magnitude for n in (1, 2, 2.5, 5, 10) if n * magnitude >= raw)
     count = -(-peak // step)  # ceil
     return [step * i for i in range(int(count) + 1)]
+
+
+# ==== SECTION 1: TRANSACTION HISTORY (subagent 1 only) ==== #
+def _build_transactions(user_id, limit=10):
+    from database.queries import get_recent_transactions
+
+    rows = get_recent_transactions(user_id, limit) or []
+    return [
+        {
+            "date": r["date"],
+            "description": r["description"] or r["category"],
+            "category": r["category"],
+            "amount": r["amount"],
+        }
+        for r in rows
+    ]
+# ==== END SECTION 1 ==== #
+
+
+# ==== SECTION 2: SUMMARY STATS (subagent 2 only) ==== #
+def _build_summary(user_id):
+    from database.queries import get_summary_stats
+
+    stats = get_summary_stats(user_id) or {}
+    return {
+        "total_spent": float(stats.get("total_spent") or 0.0),
+        "transaction_count": int(stats.get("transaction_count") or 0),
+        "top_category": stats.get("top_category") or "—",
+    }
+# ==== END SECTION 2 ==== #
+
+
+# ==== SECTION 3: CATEGORY BREAKDOWN (subagent 3 only) ==== #
+def _build_categories(user_id):
+    from database.queries import get_category_breakdown
+
+    rows = get_category_breakdown(user_id) or []
+    top = max((float(r["amount"]) for r in rows), default=0)
+    result = []
+    for r in rows:
+        bar = round(float(r["amount"]) / top * 100, 1) if top > 0 else 0
+        result.append({"name": r["name"], "amount": r["amount"],
+                       "pct": r["pct"], "bar": bar})
+    return result
+# ==== END SECTION 3 ==== #
 
 
 @app.route("/expenses/add")
