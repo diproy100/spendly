@@ -1,11 +1,47 @@
 import sqlite3
+from datetime import date, datetime
 
-from flask import Flask, abort, flash, redirect, render_template, request, url_for
+from flask import (
+    Flask,
+    abort,
+    flash,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 
-from database.db import create_user, get_db, init_db, seed_db
+from database.db import (
+    authenticate_user,
+    create_user,
+    get_category_breakdown,
+    get_db,
+    get_expense_summary,
+    get_largest_expenses,
+    get_monthly_totals,
+    get_recent_expenses,
+    get_user_by_id,
+    init_db,
+    seed_db,
+)
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-change-me"
+
+@app.template_filter("inr")
+def inr(amount):
+    """₹ with thousands separators and 2 decimals, e.g. ₹18,450.00."""
+    return "₹{:,.2f}".format(amount or 0)
+
+
+@app.template_filter("inr_short")
+def inr_short(amount):
+    """Compact ₹ for chart axes, e.g. ₹25k."""
+    if amount >= 1000:
+        return "₹{:g}k".format(round(amount / 1000, 1))
+    return "₹{:g}".format(amount)
+
 
 with app.app_context():
     init_db()
@@ -52,9 +88,23 @@ def register():
     return redirect(url_for("login"))
 
 
-@app.route("/login")
+@app.route("/login", methods=["GET", "POST"])
 def login():
-    return render_template("login.html")
+    if request.method == "GET":
+        if session.get("user_id"):
+            return redirect(url_for("profile"))
+        return render_template("login.html")
+
+    email = request.form.get("email", "").strip().lower()
+    password = request.form.get("password", "")
+
+    user_id = authenticate_user(email, password) if email and password else None
+    if user_id is None:
+        return render_template("login.html", error="Invalid email or password.")
+
+    session.clear()
+    session["user_id"] = user_id
+    return redirect(url_for("profile"))
 
 
 @app.route("/terms")
@@ -73,12 +123,135 @@ def privacy():
 
 @app.route("/logout")
 def logout():
-    return "Logout — coming in Step 3"
+    session.clear()
+    flash("You have been signed out.", "success")
+    return redirect(url_for("login"))
 
 
 @app.route("/profile")
 def profile():
-    return "Profile page — coming in Step 4"
+    user_id = session.get("user_id")
+    user = get_user_by_id(user_id) if user_id else None
+    if user is None:
+        session.clear()
+        flash("Please sign in to view your profile.", "error")
+        return redirect(url_for("login"))
+
+    stats = _build_summary(user_id)
+    total = stats["total_spent"]
+    summary = {
+        "total_amount": total,
+        "expense_count": stats["transaction_count"],
+        "top_category": stats["top_category"] if stats["transaction_count"] else None,
+        "active_months": get_expense_summary(user_id)["active_months"],
+    }
+    categories = _build_categories(user_id)
+
+    months = _monthly_series(user_id, count=6)
+    this_month = months[-1]["total"]
+    last_month = months[-2]["total"]
+    avg_month = total / summary["active_months"] if summary["active_months"] else 0
+
+    initials = "".join(part[0] for part in user["name"].split()[:2]).upper()
+    try:
+        member_since = datetime.strptime(
+            user["created_at"], "%Y-%m-%d %H:%M:%S"
+        ).strftime("%B %Y")
+    except (TypeError, ValueError):
+        member_since = None
+
+    return render_template(
+        "profile.html",
+        user=user,
+        initials=initials,
+        member_since=member_since,
+        summary=summary,
+        categories=categories,
+        months=months,
+        chart_ticks=_chart_ticks(max(m["total"] for m in months)),
+        this_month=this_month,
+        last_month=last_month,
+        avg_month=avg_month,
+        largest=get_largest_expenses(user_id, limit=4),
+        recent=_build_transactions(user_id, limit=8),
+    )
+
+
+def _monthly_series(user_id, count):
+    """Last `count` calendar months (oldest first), zero-filled."""
+    today = date.today()
+    keys = []
+    for back in range(count - 1, -1, -1):
+        y, m = today.year, today.month - back
+        while m < 1:
+            y, m = y - 1, m + 12
+        keys.append(date(y, m, 1))
+    totals = get_monthly_totals(user_id, keys[0].isoformat())
+    return [
+        {
+            "label": d.strftime("%b"),
+            "full_label": d.strftime("%B %Y"),
+            "total": totals.get(d.strftime("%Y-%m"), 0.0),
+            "current": i == count - 1,
+        }
+        for i, d in enumerate(keys)
+    ]
+
+
+def _chart_ticks(peak, max_steps=5):
+    """Evenly spaced 'nice' axis ticks from 0 to just above `peak`."""
+    if peak <= 0:
+        return [0]
+    raw = peak / max_steps
+    magnitude = 10 ** (len(str(int(raw))) - 1)
+    step = next(n * magnitude for n in (1, 2, 2.5, 5, 10) if n * magnitude >= raw)
+    count = -(-peak // step)  # ceil
+    return [step * i for i in range(int(count) + 1)]
+
+
+# ==== SECTION 1: TRANSACTION HISTORY (subagent 1 only) ==== #
+def _build_transactions(user_id, limit=10):
+    from database.queries import get_recent_transactions
+
+    rows = get_recent_transactions(user_id, limit) or []
+    return [
+        {
+            "date": r["date"],
+            "description": r["description"] or r["category"],
+            "category": r["category"],
+            "amount": r["amount"],
+        }
+        for r in rows
+    ]
+# ==== END SECTION 1 ==== #
+
+
+# ==== SECTION 2: SUMMARY STATS (subagent 2 only) ==== #
+def _build_summary(user_id):
+    from database.queries import get_summary_stats
+
+    stats = get_summary_stats(user_id) or {}
+    return {
+        "total_spent": float(stats.get("total_spent") or 0.0),
+        "transaction_count": int(stats.get("transaction_count") or 0),
+        "top_category": stats.get("top_category") or "—",
+    }
+# ==== END SECTION 2 ==== #
+
+
+# ==== SECTION 3: CATEGORY BREAKDOWN (subagent 3 only) ==== #
+def _build_categories(user_id):
+    from database.queries import get_category_breakdown
+
+    rows = get_category_breakdown(user_id) or []
+    top = max((float(r["amount"]) for r in rows), default=0)
+    result = []
+    for r in rows:
+        bar = round(float(r["amount"]) / top * 100, 1) if top > 0 else 0
+        result.append({"name": r["name"], "amount": r["amount"],
+                       "pct": r["pct"], "bar": bar})
+    return result
+# ==== END SECTION 3 ==== #
 
 
 @app.route("/expenses/add")
